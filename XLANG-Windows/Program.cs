@@ -11,9 +11,16 @@ namespace XLANG_Windows
         //XLANG compiler
         static void Main(string[] args)
         {
+            //Data type (named int)
+            //Struct size: 4 bytes
+            //Alignment: 4 bytes
             string testProg = @"
-             int eger = 5+2;
-             
+             struct int 4.4 {
+                 int +(int other);
+                 int -(int other);
+                 int *(int other);
+                 int /(int other);
+             };
 ";
             Parser parser = new Parser(testProg);
             

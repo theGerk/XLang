@@ -65,13 +65,23 @@ namespace XLANG_Windows
             Prev();
             return bodyBuilder.ToString();
         }
-        public bool Expect(char mander)
+        public string Expect(params char[] mander)
         {
-            if(Next())
+            StringBuilder m = new StringBuilder();
+            while(Next())
             {
-                return Current == mander;
+                for(int i = 0;i<mander.Length;i++)
+                {
+                    if(mander[i] == Current)
+                    {
+                        Prev();
+                        return m.ToString();
+                    }
+                }
+                m.Append(Current);
             }
-            return false;
+            Prev();
+            return m.ToString();
         }
         public bool Next()
         {
@@ -89,6 +99,10 @@ namespace XLANG_Windows
     }
     public class XType:XObject
     {
+        public int size; //Size of struct (or zero)
+        public int alignment; //Alignment of struct
+        public bool isStruct;
+
         static Dictionary<string, XType> types = new Dictionary<string, XType>();
         public Dictionary<string, XType> Fields = new Dictionary<string, XType>();
         public Dictionary<string, XFunction> Functions = new Dictionary<string, XFunction>();
@@ -134,15 +148,12 @@ namespace XLANG_Windows
             this.parent = parent;
         }
     }
-    public class XFunctionExternal:XFunction
-    {
-
-    }
+    
     public class XFunction:XObject
     {
         public Scope Scope = new Scope();
         public List<Expression> Operations = new List<Expression>();
-
+        public List<Variable> localVars = new List<Variable>();
     }
     public class Expression:XObject
     {
@@ -227,6 +238,41 @@ namespace XLANG_Windows
             Error("Unexpected End-of-File (EOF).");
             return null;
         }
+        XType ClassBody(XType type)
+        {
+            while(ptr.Next())
+            {
+                ptr.Prev();
+
+            }
+            return type;
+        }
+        XType Struct()
+        {
+            XType retval = new XType(ptr.ExpectIdentifier());
+            retval.isStruct = true;
+            ptr.ReadWhitespace();
+            ptr.Next();
+            if(char.IsDigit(ptr.Current))
+            {
+                //Size.Alignment
+                ptr.Prev();
+                //Read until 
+                retval.size = int.Parse(ptr.Expect('.'));
+                ptr.Next();
+                retval.alignment = (int)ptr.ReadNumber();
+                ptr.ReadWhitespace();
+                ptr.Next();
+                
+            }
+            if (ptr.Current != '{')
+            {
+                Error("Expected {");
+            }
+            ptr.ReadWhitespace();
+            ClassBody(retval);
+            return retval;
+        }
         public XFunction FunctionBody(XFunction function)
         {
             var scope = function.Scope;
@@ -235,36 +281,45 @@ namespace XLANG_Windows
                 ptr.Prev();
                 string id = ptr.ExpectIdentifier();
                 ptr.ReadWhitespace();
-                ptr.Next();
-                Expression exp = null;
-                if(char.IsLetter(ptr.Current))
+                if (id == "struct")
                 {
-                    //Variable declaration (local scope)
-                    ptr.Prev();
-                    string varName = ptr.ExpectIdentifier();
-                    var local = new LocalVariable(varName, id);
-                    if(scope.locals.ContainsKey(varName))
-                    {
-                        Error("Invalid redeclaration of " + varName + ".");
-                    }
-                    scope.locals.Add(varName, local);
-                    exp = new VariableReferenceExpression(local);
+                    Struct();
                 }
-                ptr.ReadWhitespace();
-                ptr.Next();
-                if(ptr.Current == ';')
+                else
                 {
-                    //End of expression
-                    ptr.ReadWhitespace();
-                    
-                }else
-                {
-                    //Parse expression
-                    ptr.Prev();
-                    exp = Expression(exp);
-                    function.Operations.Add(exp);
                     ptr.Next();
+                    Expression exp = null;
+                    if (char.IsLetter(ptr.Current))
+                    {
+                        //Variable declaration (local scope)
+                        ptr.Prev();
+                        string varName = ptr.ExpectIdentifier();
+                        var local = new LocalVariable(varName, id);
+                        if (scope.locals.ContainsKey(varName))
+                        {
+                            Error("Invalid redeclaration of " + varName + ".");
+                        }
+                        function.localVars.Add(local);
+                        scope.locals.Add(varName, local);
+                        exp = new VariableReferenceExpression(local);
+                    }
                     ptr.ReadWhitespace();
+                    ptr.Next();
+                    if (ptr.Current == ';')
+                    {
+                        //End of expression
+                        ptr.ReadWhitespace();
+
+                    }
+                    else
+                    {
+                        //Parse expression
+                        ptr.Prev();
+                        exp = Expression(exp);
+                        function.Operations.Add(exp);
+                        ptr.Next();
+                        ptr.ReadWhitespace();
+                    }
                 }
             }
             return function;
@@ -275,11 +330,15 @@ namespace XLANG_Windows
             
             return FunctionBody(new XFunction());
         }
+        public XFunction MainMethod;
+        
         public Parser(string txt)
         {
+            CoreLibrary.Initialize();
             //Parse
             ptr = new StringPointer(txt);
-            Main();
+            MainMethod = Main();
+            
         }
     }
 }

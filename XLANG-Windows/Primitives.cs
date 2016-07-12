@@ -6,15 +6,19 @@ using System.Threading.Tasks;
 
 namespace XLANG_Windows
 {
-    public class XInt: XType
+    public static class CoreLibrary
     {
-        public XInt():base("int")
+        
+        static bool init = false;
+        public static void Initialize()
         {
-            Functions["+"] = new XFunctionExternal();
-            Functions["-"] = new XFunctionExternal();
-            Functions["*"] = new XFunctionExternal();
-            Functions["/"] = new XFunctionExternal();
+            if(init)
+            {
+                return;
+            }
+            init = true;
             
+
         }
     }
 }
