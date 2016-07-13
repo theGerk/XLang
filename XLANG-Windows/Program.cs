@@ -20,7 +20,7 @@ namespace XLANG_Windows
                  int -(int other);
                  int *(int other);
                  int /(int other);
-             };
+             }
 ";
             Parser parser = new Parser(testProg);
             

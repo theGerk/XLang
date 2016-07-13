@@ -16,7 +16,7 @@ namespace XLANG_Windows
             StringBuilder mbuilder = new StringBuilder();
             while (Next())
             {
-                if(!char.IsDigit(Current))
+                if (!char.IsDigit(Current))
                 {
                     Prev();
                     return int.Parse(mbuilder.ToString());
@@ -41,9 +41,9 @@ namespace XLANG_Windows
         }
         public void ReadWhitespace()
         {
-            while(Next())
+            while (Next())
             {
-                if(!char.IsWhiteSpace(Current))
+                if (!char.IsWhiteSpace(Current))
                 {
                     break;
                 }
@@ -55,7 +55,7 @@ namespace XLANG_Windows
             StringBuilder bodyBuilder = new StringBuilder(); //The one thing you'll never be able to do.
             while (Next())
             {
-                if(!char.IsLetterOrDigit(Current))
+                if (!char.IsLetterOrDigit(Current))
                 {
                     Prev();
                     return bodyBuilder.ToString();
@@ -65,14 +65,40 @@ namespace XLANG_Windows
             Prev();
             return bodyBuilder.ToString();
         }
+      
+
+        public string ExpectFunctionName()
+        {
+            StringBuilder m = new StringBuilder();
+            while (Next())
+            {
+                if (char.IsWhiteSpace(Current))
+                {
+                    Prev();
+                    return m.ToString();
+                }
+                if (Current == '(' && m.ToString() != "")
+                {
+                    Prev();
+                    return m.ToString();
+                }
+                m.Append(Current);
+
+            }
+            Prev();
+            return m.ToString();
+        }
+
+
+
         public string Expect(params char[] mander)
         {
             StringBuilder m = new StringBuilder();
-            while(Next())
+            while (Next())
             {
-                for(int i = 0;i<mander.Length;i++)
+                for (int i = 0; i < mander.Length; i++)
                 {
-                    if(mander[i] == Current)
+                    if (mander[i] == Current)
                     {
                         Prev();
                         return m.ToString();
@@ -97,7 +123,7 @@ namespace XLANG_Windows
     {
         public XType objType; //Type of object
     }
-    public class XType:XObject
+    public class XType : XObject
     {
         public int size; //Size of struct (or zero)
         public int alignment; //Alignment of struct
@@ -116,21 +142,21 @@ namespace XLANG_Windows
         }
         public string Name;
     }
-    
+
     public abstract class Variable
     {
         public string Name;
         public string Type;
         public Variable(string name, string type)
         {
-            
+
             Name = name;
             Type = type;
         }
     }
-    public class LocalVariable:Variable
+    public class LocalVariable : Variable
     {
-        public LocalVariable(string name, string type):base(name,type)
+        public LocalVariable(string name, string type) : base(name, type)
         {
 
         }
@@ -141,24 +167,25 @@ namespace XLANG_Windows
         public Scope parent;
         public Scope()
         {
-            
+
         }
         public Scope(Scope parent)
         {
             this.parent = parent;
         }
     }
-    
-    public class XFunction:XObject
+
+    public class XFunction : XObject
     {
         public Scope Scope = new Scope();
         public List<Expression> Operations = new List<Expression>();
         public List<Variable> localVars = new List<Variable>();
+        public Dictionary<string, Variable> args = new Dictionary<string, Variable>();
     }
-    public class Expression:XObject
+    public class Expression : XObject
     {
     }
-    public class VariableReferenceExpression:Expression
+    public class VariableReferenceExpression : Expression
     {
         public Variable variable;
         public VariableReferenceExpression(Variable variable)
@@ -166,22 +193,22 @@ namespace XLANG_Windows
             this.variable = variable;
         }
     }
-    
-    public class CompilationException:Exception
+
+    public class CompilationException : Exception
     {
-        public CompilationException(string msg):base(msg)
+        public CompilationException(string msg) : base(msg)
         {
 
         }
     }
-    public class BinaryExpression:Expression
+    public class BinaryExpression : Expression
     {
         public char op;
         public Expression left;
         public Expression right;
-        
+
     }
-    public class ConstantExpression:Expression
+    public class ConstantExpression : Expression
     {
         object val;
         public ConstantExpression(object val)
@@ -198,9 +225,9 @@ namespace XLANG_Windows
         }
         public Expression Expression(Expression prev)
         {
-            while(ptr.Next())
+            while (ptr.Next())
             {
-                switch(ptr.Current)
+                switch (ptr.Current)
                 {
                     case '+':
                     case '-':
@@ -215,35 +242,106 @@ namespace XLANG_Windows
                             exp.right = Expression(exp);
                             ptr.ReadWhitespace();
                             Expression next = Expression(exp);
-                            
+
                             return next == null ? exp : next;
                         }
                     case ';':
                         ptr.Prev();
                         return null;
                     default:
-                        if(char.IsDigit(ptr.Current))
+                        if (char.IsDigit(ptr.Current))
                         {
                             ptr.Prev();
-                            Expression exp =  new ConstantExpression(ptr.ReadNumber());
+                            Expression exp = new ConstantExpression(ptr.ReadNumber());
                             ptr.ReadWhitespace();
                             Expression next = Expression(exp);
-                            
+
                             return next == null ? exp : next;
                         }
-                        Error("Unexpected token "+ptr.Current);
+                        Error("Unexpected token " + ptr.Current);
                         return null;
                 }
             }
             Error("Unexpected End-of-File (EOF).");
             return null;
         }
-        XType ClassBody(XType type)
+        XFunction functionArgs(XFunction func)
         {
-            while(ptr.Next())
+            while (ptr.Next())
             {
                 ptr.Prev();
+                string argType = ptr.ExpectIdentifier();
+                ptr.ReadWhitespace();
+                string argName = ptr.ExpectIdentifier();
+                ptr.ReadWhitespace();
+                ptr.Next();
+                switch (ptr.Current)
+                {
+                    case ',':
+                        {
+                            func.args.Add(argName, new LocalVariable(argName, argType));
+                        }
+                        break;
+                    case ')':
+                        func.args.Add(argName, new LocalVariable(argName, argType));
+                        goto Velociraptor;
+                    default:
+                        Error("Expected ')'.");
+                        break;
+                }
 
+
+            }
+            Velociraptor:
+
+            return func;
+        }
+        XType ClassBody(XType type)
+        {
+            while (ptr.Next())
+            {
+                if(ptr.Current == '}')
+                {
+                    return type;
+                }
+                ptr.Prev();
+                string typename = ptr.ExpectIdentifier();
+                ptr.ReadWhitespace();
+                ptr.Next();
+                if (!(char.IsDigit(ptr.Current) || char.IsLetter(ptr.Current)))
+                {
+                    ptr.Prev();
+                    //Must be method (operator overload)
+                    string funcName = ptr.ExpectFunctionName();
+
+                    ptr.ReadWhitespace();
+                    ptr.Next();
+                    if (ptr.Current != '(')
+                    {
+                        Error("Expected '('.");
+                    }
+                    ptr.ReadWhitespace();
+                    XFunction func = new XFunction();
+                    functionArgs(func);
+                    type.Functions[funcName] = func;
+                    ptr.ReadWhitespace();
+                    ptr.Next();
+                    if (!(ptr.Current == ';' || ptr.Current == '{'))
+                    {
+                        Error("Expected function.");
+                    }
+                    if (ptr.Current == '{')
+                    {
+                        FunctionBody(func);
+                    }
+
+                    ptr.ReadWhitespace();
+
+                }
+                else
+                {
+                    Error("Not yet implemented...");
+                }
             }
             return type;
         }
@@ -253,7 +351,7 @@ namespace XLANG_Windows
             retval.isStruct = true;
             ptr.ReadWhitespace();
             ptr.Next();
-            if(char.IsDigit(ptr.Current))
+            if (char.IsDigit(ptr.Current))
             {
                 //Size.Alignment
                 ptr.Prev();
@@ -263,7 +361,7 @@ namespace XLANG_Windows
                 retval.alignment = (int)ptr.ReadNumber();
                 ptr.ReadWhitespace();
                 ptr.Next();
-                
+
             }
             if (ptr.Current != '{')
             {
@@ -283,7 +381,8 @@ namespace XLANG_Windows
                 ptr.ReadWhitespace();
                 if (id == "struct")
                 {
-                    Struct();
+                    XType type = Struct();
+                    ptr.ReadWhitespace();
                 }
                 else
                 {
@@ -327,18 +426,18 @@ namespace XLANG_Windows
         public XFunction Main()
         {
             ptr.ReadWhitespace();
-            
+
             return FunctionBody(new XFunction());
         }
         public XFunction MainMethod;
-        
+
         public Parser(string txt)
         {
             CoreLibrary.Initialize();
             //Parse
             ptr = new StringPointer(txt);
             MainMethod = Main();
-            
+
         }
     }
 }
